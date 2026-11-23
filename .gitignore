@@ -1,0 +1,15 @@
+# Never commit WireGuard private keys or live configs
+*.key
+privatekey
+publickey
+wg0.conf
+!*.conf.example
+*.bak.*
+
+# Local scratch
+tools/frames/
+tools/out/
+__pycache__/
+.venv/
+.DS_Store
+Thumbs.db

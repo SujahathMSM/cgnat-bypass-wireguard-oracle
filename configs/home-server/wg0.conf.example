@@ -1,0 +1,24 @@
+# /etc/wireguard/wg0.conf on the home Ubuntu server (the "spoke")
+#
+# The home server sits behind the ISP's CGNAT, so nobody can connect IN to it.
+# Instead it dials OUT to the Oracle VM and keeps that connection alive.
+#
+# Replace the <...> values. Never commit a real PrivateKey.
+
+[Interface]
+# Tunnel IP of the home server.
+Address = 10.8.0.2/24
+PrivateKey = <HOME_PRIVATE_KEY>
+# No ListenPort: this side only dials out.
+
+[Peer]
+# oracle-hub
+PublicKey = <HUB_PUBLIC_KEY>
+# Where to dial: the Oracle VM's public IP and WireGuard port.
+Endpoint = <ORACLE_PUBLIC_IP>:51820
+# Send traffic for the whole tunnel network via the hub.
+# (Lets you add more peers later: laptop 10.8.0.3, phone 10.8.0.4 ...)
+AllowedIPs = 10.8.0.0/24
+# Send a tiny packet every 25 s so the ISP's CGNAT keeps the mapping open.
+# Without this the tunnel silently dies after a minute or two of idle time.
+PersistentKeepalive = 25

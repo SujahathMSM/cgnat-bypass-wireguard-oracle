@@ -1,0 +1,16 @@
+# /etc/caddy/Caddyfile on the home Ubuntu server
+#
+# Because the site address is a real domain, Caddy automatically requests a
+# Let's Encrypt certificate and renews it before it expires. The ACME
+# challenge reaches Caddy through Oracle -> DNAT -> WireGuard, which is why
+# public ports 80 and 443 must both be forwarded.
+#
+# Apply changes:  sudo systemctl reload caddy
+
+your-subdomain.duckdns.org {
+	# Test response used to prove HTTPS works end to end.
+	respond "Hello over HTTPS from my home box via WireGuard + Oracle!"
+
+	# Next step: replace the line above with a real app, for example
+	# reverse_proxy localhost:8080
+}

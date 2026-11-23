@@ -1,0 +1,42 @@
+# /etc/wireguard/wg0.conf on the Oracle Cloud VM (the "hub")
+#
+# The hub has the public IP. It listens for the home server, which dials in
+# from behind CGNAT, and forwards public TCP 80/443 through the tunnel.
+#
+# Replace the <...> values. Never commit a real PrivateKey.
+# Tip: scripts/setup-hub.sh renders this file for you and pulls the
+# private key straight from /etc/wireguard/server.key.
+
+[Interface]
+# Tunnel IP of the hub. /24 = the whole 10.8.0.0-10.8.0.255 tunnel network.
+Address = 10.8.0.1/24
+# UDP port the hub listens on. Must be open in the Oracle Security List
+# AND in the VM's own iptables INPUT chain.
+ListenPort = 51820
+PrivateKey = <HUB_PRIVATE_KEY>
+
+# --- Port forwarding: public 80/443 -> home server (10.8.0.2) ---------------
+# These rules exist only while the tunnel is up and are removed on shutdown.
+# "ens3" is the VM's internet-facing interface (check with: ip -br a).
+
+# 1) DNAT: rewrite the destination of incoming web traffic to the home server.
+PostUp = iptables -t nat -A PREROUTING -i ens3 -p tcp -m multiport --dports 80,443 -j DNAT --to-destination 10.8.0.2
+# 2) MASQUERADE: make forwarded traffic look like it comes from 10.8.0.1, so
+#    the home server replies back through the tunnel (not via its home ISP).
+PostUp = iptables -t nat -A POSTROUTING -o wg0 -j MASQUERADE
+# 3) Allow NEW web connections from the internet into the tunnel.
+#    -I FORWARD 1 puts the rule ABOVE Oracle's default REJECT rule.
+PostUp = iptables -I FORWARD 1 -i ens3 -o wg0 -p tcp -m multiport --dports 80,443 -j ACCEPT
+# 4) Allow only the replies to existing connections back out.
+PostUp = iptables -I FORWARD 1 -i wg0 -o ens3 -m state --state RELATED,ESTABLISHED -j ACCEPT
+
+PostDown = iptables -t nat -D PREROUTING -i ens3 -p tcp -m multiport --dports 80,443 -j DNAT --to-destination 10.8.0.2
+PostDown = iptables -t nat -D POSTROUTING -o wg0 -j MASQUERADE
+PostDown = iptables -D FORWARD -i ens3 -o wg0 -p tcp -m multiport --dports 80,443 -j ACCEPT
+PostDown = iptables -D FORWARD -i wg0 -o ens3 -m state --state RELATED,ESTABLISHED -j ACCEPT
+
+[Peer]
+# home-ubuntu (the server behind CGNAT)
+PublicKey = <HOME_PUBLIC_KEY>
+# This peer may ONLY use 10.8.0.2. Acts as both a route and a security filter.
+AllowedIPs = 10.8.0.2/32
