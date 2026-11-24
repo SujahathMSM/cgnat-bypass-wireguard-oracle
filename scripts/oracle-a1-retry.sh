@@ -1,40 +1,60 @@
 #!/usr/bin/env bash
-# Keep trying to launch an Always Free Ampere A1 instance until capacity frees up.
+# Keep trying to launch an Always Free Ampere A1 instance until capacity frees up,
+# and email you (via OCI Notifications) when it succeeds or stops on an error.
 #
 # Runs on any machine with a configured OCI CLI (e.g. the E2.1.Micro hub).
-# Stops on success, or on any error that is NOT "out of capacity".
 #
 # One-time setup:
 #   python3 -m venv ~/oci-venv && ~/oci-venv/bin/pip install oci-cli
-#   ~/oci-venv/bin/oci setup config      # then upload the printed public key:
-#                                         # Profile -> My profile -> API keys -> Add API key
+#   ~/oci-venv/bin/oci setup config      # passphrase: N/A
+#   upload ~/.oci/oci_api_key_public.pem: Profile -> My profile -> API keys -> Add API key
 #
-# Fill in the variables below (see "Finding the values"), then:
-#   tmux new -s a1 './oracle-a1-retry.sh'       # detach with Ctrl+b then d
+# Put your values in ~/.a1-retry.env (so the script itself never needs editing):
+#   SUBNET_ID=ocid1.subnet.oc1.ap-hyderabad-1....     # the PUBLIC subnet, not the VCN
+#   AD=XXXX:AP-HYDERABAD-1-AD-1                        # oci iam availability-domain list
+#   NOTIFY_TOPIC_ID=ocid1.onstopic.oc1....             # optional, for email alerts
 #
-# Finding the values:
-#   COMPARTMENT_ID  tenancy OCID: Profile -> Tenancy -> OCID
-#   SUBNET_ID       Networking -> VCN dev-01 -> public subnet-dev-01 -> OCID
-#   AD              oci iam availability-domain list --query 'data[0].name' --raw-output
-#   IMAGE_ID        found automatically below (latest Ubuntu 24.04 for A1)
+# Run in the background:
+#   tmux new -s a1 'bash ~/oracle-a1-retry.sh; read -p "Script stopped. Press Enter to close."'
+#   detach with Ctrl+B then D (not Ctrl+Z, which pauses the script)
 set -uo pipefail
 
+ENV_FILE="${ENV_FILE:-$HOME/.a1-retry.env}"
+# shellcheck source=/dev/null
+[[ -f "$ENV_FILE" ]] && source "$ENV_FILE"
+
 OCI="${OCI:-$HOME/oci-venv/bin/oci}"
-COMPARTMENT_ID="${COMPARTMENT_ID:-ocid1.tenancy.oc1..CHANGE_ME}"
-SUBNET_ID="${SUBNET_ID:-ocid1.subnet.oc1.ap-hyderabad-1.CHANGE_ME}"
-AD="${AD:-CHANGE_ME:AP-HYDERABAD-1-AD-1}"
+# Default compartment = tenancy root, read from the CLI config.
+COMPARTMENT_ID="${COMPARTMENT_ID:-$(grep -m1 '^tenancy=' "$HOME/.oci/config" 2>/dev/null | cut -d= -f2)}"
+SUBNET_ID="${SUBNET_ID:-CHANGE_ME}"
+AD="${AD:-CHANGE_ME}"
+NOTIFY_TOPIC_ID="${NOTIFY_TOPIC_ID:-}"
 SSH_PUBKEY_FILE="${SSH_PUBKEY_FILE:-$HOME/.ssh/authorized_keys}"  # key you'll log in with
 NAME="${NAME:-a1-dev-01}"
 OCPUS="${OCPUS:-1}"            # start small; resize to 4 / 24 GB later
 MEMORY_GB="${MEMORY_GB:-6}"
 BOOT_GB="${BOOT_GB:-50}"       # keep ALL boot + block volumes <= 200 GB total
 SLEEP_SECONDS="${SLEEP_SECONDS:-900}"   # 15 min between attempts; don't hammer the API
+JITTER="${JITTER:-60}"                 # extra random 0..JITTER-1 seconds
 
 log() { printf '%s  %s\n' "$(date '+%F %T')" "$*"; }
 
-for v in COMPARTMENT_ID SUBNET_ID AD; do
-  if [[ "${!v}" == *CHANGE_ME* ]]; then echo "Set $v first." >&2; exit 1; fi
+# Email via OCI Notifications (Always Free tier includes 1,000 emails/month).
+notify() {
+  [[ -n "$NOTIFY_TOPIC_ID" ]] || return 0
+  if "$OCI" ons message publish --topic-id "$NOTIFY_TOPIC_ID" \
+      --title "$1" --body "$2" >/dev/null 2>&1; then
+    log "Email sent: $1"
+  else
+    log "Could not send email (check NOTIFY_TOPIC_ID)"
+  fi
+}
+
+[[ -n "$COMPARTMENT_ID" ]] || { echo "No tenancy in ~/.oci/config; set COMPARTMENT_ID." >&2; exit 1; }
+for v in SUBNET_ID AD; do
+  if [[ "${!v}" == *CHANGE_ME* ]]; then echo "Set $v in $ENV_FILE first." >&2; exit 1; fi
 done
+[[ "$SUBNET_ID" == ocid1.subnet.* ]] || { echo "SUBNET_ID must be a subnet OCID (ocid1.subnet...), not a VCN." >&2; exit 1; }
 [[ -s "$SSH_PUBKEY_FILE" ]] || { echo "SSH public key file not found: $SSH_PUBKEY_FILE" >&2; exit 1; }
 
 IMAGE_ID="${IMAGE_ID:-$("$OCI" compute image list \
@@ -44,7 +64,8 @@ IMAGE_ID="${IMAGE_ID:-$("$OCI" compute image list \
   --query 'data[0].id' --raw-output)}"
 [[ "$IMAGE_ID" == ocid1.image.* ]] || { echo "Could not find an Ubuntu 24.04 A1 image: $IMAGE_ID" >&2; exit 1; }
 log "Image: $IMAGE_ID"
-log "Trying $OCPUS OCPU / $MEMORY_GB GB every $SLEEP_SECONDS s. Ctrl+C to stop."
+alerts=off; [[ -n "$NOTIFY_TOPIC_ID" ]] && alerts=on
+log "Trying $OCPUS OCPU / $MEMORY_GB GB every $SLEEP_SECONDS s. Email alerts: $alerts"
 
 attempt=0
 while true; do
@@ -66,6 +87,8 @@ while true; do
     log "SUCCESS on attempt $attempt. Instance is being created:"
     echo "$out" | grep -E '"(id|display-name|lifecycle-state)"' | head -5
     log "Find its public IP in Compute -> Instances in a minute or two."
+    notify "Oracle A1 created: $NAME" \
+      "Got a VM.Standard.A1.Flex ($OCPUS OCPU / $MEMORY_GB GB) on attempt $attempt at $(date '+%F %T %Z'). Check Compute -> Instances for the public IP."
     exit 0
   fi
 
@@ -78,8 +101,10 @@ while true; do
   else
     log "Attempt $attempt failed with a different error, stopping so you can check it:"
     echo "$out"
+    notify "Oracle A1 retry stopped" \
+      "Attempt $attempt failed with an unexpected error at $(date '+%F %T %Z'). SSH in and run: tmux attach -t a1"
     exit 1
   fi
   # small random jitter so retries don't land on the same second every time
-  sleep $((SLEEP_SECONDS + RANDOM % 60))
+  sleep $((SLEEP_SECONDS + RANDOM % JITTER))
 done
