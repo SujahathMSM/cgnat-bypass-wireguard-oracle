@@ -52,7 +52,7 @@ Don't forward 22 (see [security notes](07-security-notes.md)).
 - [ ] Hub-and-spoke: add laptop (`10.8.0.3`) and phone (`10.8.0.4`) as peers for private access from anywhere
 - [ ] Put real services behind Caddy (Team Ops MCP, Open WebUI) with authentication
 - [ ] Hardening items from the security notes
-- [ ] Move the hub to an A1.Flex (4 OCPU / 24 GB) once capacity is available
+- [ ] Get an A1.Flex (up to the Always Free total of 2 OCPU / 12 GB) once capacity is available; `scripts/oracle-a1-retry.sh` is running for this
 - [ ] Terraform for the Oracle side (VCN, security list, instance)
 
 ![Planned hub-and-spoke network](../diagrams/hub-and-spoke-roadmap.svg)

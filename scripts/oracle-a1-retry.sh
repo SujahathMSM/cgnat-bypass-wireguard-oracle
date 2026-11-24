@@ -31,7 +31,7 @@ AD="${AD:-CHANGE_ME}"
 NOTIFY_TOPIC_ID="${NOTIFY_TOPIC_ID:-}"
 SSH_PUBKEY_FILE="${SSH_PUBKEY_FILE:-$HOME/.ssh/authorized_keys}"  # key you'll log in with
 NAME="${NAME:-a1-dev-01}"
-OCPUS="${OCPUS:-1}"            # start small; resize to 4 / 24 GB later
+OCPUS="${OCPUS:-1}"            # start small; Always Free A1 total is 2 OCPU / 12 GB
 MEMORY_GB="${MEMORY_GB:-6}"
 BOOT_GB="${BOOT_GB:-50}"       # keep ALL boot + block volumes <= 200 GB total
 SLEEP_SECONDS="${SLEEP_SECONDS:-900}"   # 15 min between attempts; don't hammer the API

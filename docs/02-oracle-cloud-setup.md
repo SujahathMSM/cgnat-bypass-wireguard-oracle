@@ -46,7 +46,7 @@ type $env:USERPROFILE\.ssh\oracle_ed25519.pub   # paste this into Oracle
 | Section | Choice | Why |
 |---|---|---|
 | Image | Canonical Ubuntu 24.04 (not Minimal) | Matches my other machines; Minimal strips useful tools |
-| Shape (first attempt) | `VM.Standard.A1.Flex`, 4 OCPU / 24 GB | The best Always Free shape |
+| Shape (first attempt) | `VM.Standard.A1.Flex`, 4 OCPU / 24 GB | Picked from older guides. Oracle's current docs put the Always Free A1 allowance at **2 OCPU / 12 GB** (1,500 OCPU hours and 9,000 GB hours a month), so anything above that would be billed |
 | Shape (what I actually got) | `VM.Standard.E2.1.Micro` (1/8 OCPU burstable, 1 GB) | A1 was out of capacity in AD-1 |
 | Capacity type | On-demand | Preemptible can be reclaimed at any time |
 | Shielded / confidential | Off | Not supported for these shapes; the warning is harmless |

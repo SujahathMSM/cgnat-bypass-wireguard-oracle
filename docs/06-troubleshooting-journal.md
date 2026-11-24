@@ -35,7 +35,9 @@ API Error: Out of capacity for shape VM.Standard.A1.Flex in availability domain 
 Create the instance in a different availability domain or try again later.
 ```
 
-Dropping to 2 OCPU / 12 GB gave the same error.
+Dropping to 2 OCPU / 12 GB gave the same error, and so did 1 OCPU / 6 GB.
+
+I later found that Oracle's current docs put the Always Free A1 allowance at 2 OCPU / 12 GB in total, not the 4 OCPU / 24 GB many guides still quote. The first attempt was asking for more than the free amount.
 
 **Cause.** Oracle's free Arm capacity is shared by everyone and often runs out. Hyderabad has only one availability domain, so there was no other AD to try, and the home region can't be changed.
 
