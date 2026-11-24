@@ -42,6 +42,7 @@ Dropping to 2 OCPU / 12 GB gave the same error.
 **Fix.**
 - Saved the A1 configuration as a **Resource Manager stack** (Terraform) so I can retry with one click at off-peak hours.
 - Built the project on the always-available `VM.Standard.E2.1.Micro` instead, with a 50 GB boot volume to leave storage for a future A1.
+- Retry automatically every 15 minutes with [`scripts/oracle-a1-retry.sh`](../scripts/oracle-a1-retry.sh) (OCI CLI), starting at 1 OCPU / 6 GB. Even 1 OCPU / 6 GB was out of capacity at 5:30 AM local time on 24 Nov.
 
 **Lesson.** Always Free capacity isn't guaranteed. Design the setup so the hub can be small: a WireGuard relay barely uses CPU.
 
